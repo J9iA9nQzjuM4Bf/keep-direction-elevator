@@ -34,7 +34,7 @@ class HardwareElevator(object):
         pass
 
 
-class BaseElevator(object):
+class KeepDirectionElevator(object):
 
     def __init__(self, hardware_elevator_class=None):
         hardware_elevator_class = hardware_elevator_class or HardwareElevator
@@ -78,7 +78,7 @@ class BaseElevator(object):
             elif self._direction == Directions.DOWN:
                 self.hw.move_down()
 
-    def _stop(self, floor):
+    def _stop(self):
         self._update_direction()
 
         self._door_closed = False
@@ -86,14 +86,7 @@ class BaseElevator(object):
 
     def _update_direction(self):
         floor = self.hw.get_current_floor()
-        next_floor = self._get_next_stop(floor)
-
-        if next_floor > floor:
-            self._direction = Directions.UP
-        elif next_floor < floor:
-            self._direction = Directions.DOWN
-        else:
-            self._direction = Directions.NONE
+        self._direction = self._get_new_direction(floor)
 
     def _clean_requests(self):
         floor = self.hw.get_current_floor()
@@ -110,10 +103,13 @@ class BaseElevator(object):
         self._start()
 
     def on_floor(self):
-        floor = self.hw.get_current_floor()
+        if self._get_next_request(Directions.NONE):
+            valid_directions = [Directions.NONE, self._direction]
+        else:
+            valid_directions = [Directions.NONE, Directions.UP, Directions.DOWN]
 
-        if self._should_stop(floor):
-            self._stop(floor)
+        if any([self.hw.get_current_floor() in self.requests[direction] for direction in valid_directions]):
+            self._stop()
 
     def floor_button_pressed(self, floor, direction):
         self.requests[direction].add(floor)
@@ -128,21 +124,17 @@ class BaseElevator(object):
             self._start()
 
 
-class DropOffPriorityElevator(BaseElevator):
-    def _get_next_stop(self, current_floor):
+class DropOffPriorityElevator(KeepDirectionElevator):
+    def _get_new_direction(self, current_floor):
         if self._direction == Directions.NONE:
-            value = self._get_nearest_request(current_floor, Directions.NONE, Directions.UP, Directions.DOWN)
+            next_floor = self._get_nearest_request(current_floor, Directions.NONE, Directions.UP, Directions.DOWN)
 
         else:
-            value = self._get_next_request(current_floor, Directions.NONE)
+            next_floor = self._get_next_request(current_floor, Directions.NONE)
 
-        return value or current_floor
-
-    def _should_stop(self, current_floor):
-        if self._get_next_request(Directions.NONE):
-            valid_directions = [Directions.NONE, self._direction]
-        else:
-            valid_directions = [Directions.NONE, Directions.UP, Directions.DOWN]
-
-        return any([current_floor in self.requests[direction] for direction in valid_directions])
-
+        if next_floor is None:
+            return Directions.NONE
+        elif next_floor > current_floor:
+            return Directions.UP
+        elif next_floor < current_floor:
+            return Directions.DOWN
