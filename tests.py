@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-from main import KeepDirectionElevator, Directions
+from main import Directions, DropOffPriorityElevator
 
 
 class KeepDirectionElevatorTestCase(unittest.TestCase):
@@ -9,7 +9,7 @@ class KeepDirectionElevatorTestCase(unittest.TestCase):
     def setUp(self):
         with mock.patch('main.HardwareElevator') as mock_hardware_elevator:
             self.hardware_elevator = mock_hardware_elevator.return_value
-            self.elevator = KeepDirectionElevator()
+            self.elevator = DropOffPriorityElevator()
 
     def test_moves(self):
         self.hardware_elevator.get_current_floor.return_value = 0

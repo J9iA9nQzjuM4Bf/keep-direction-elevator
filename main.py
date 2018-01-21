@@ -1,6 +1,6 @@
 import threading
 
-from sorted_dict import SortedDict
+from sorted_list import get_nearest, SortedList
 
 
 class Directions:
@@ -34,7 +34,7 @@ class HardwareElevator(object):
         pass
 
 
-class KeepDirectionElevator(object):
+class BaseElevator(object):
 
     def __init__(self, hardware_elevator_class=None):
         hardware_elevator_class = hardware_elevator_class or HardwareElevator
@@ -43,13 +43,28 @@ class KeepDirectionElevator(object):
         self.hw.register_close_event_handler(self.on_doors_closed)
         self.hw.register_on_floor_handler(self.on_floor)
 
-        self._drop_offs = SortedDict()
-        self._pick_ups = SortedDict()
+        self.requests = {
+            Directions.NONE: SortedList(),
+            Directions.UP: SortedList(),
+            Directions.DOWN: SortedList(),
+        }
 
         self._direction = Directions.NONE
         self._door_closed = False
 
         self._start_lock = threading.Lock()
+
+    def _get_nearest_request(self, floor, *include):
+        requested_floors = [self.requests[direction].get_nearest(floor)
+                            for direction in include]
+
+        return get_nearest(floor, *requested_floors)
+
+    def _get_next_request(self, floor, *include):
+        requested_floors = [self.requests[direction].get_next_key(floor, self._direction)
+                            for direction in include]
+
+        return get_nearest(floor, *requested_floors)
 
     def _start(self):
         self._clean_requests()
@@ -71,49 +86,24 @@ class KeepDirectionElevator(object):
 
     def _update_direction(self):
         floor = self.hw.get_current_floor()
+        next_floor = self._get_next_stop(floor)
 
-        if self._direction == Directions.NONE:
-            next_floor = self._get_next_stop(floor)
-            if next_floor > floor:
-                self._direction = Directions.UP
-                return True
-            else:
-                self._direction = Directions.DOWN
-                return True
-
+        if next_floor > floor:
+            self._direction = Directions.UP
+        elif next_floor < floor:
+            self._direction = Directions.DOWN
         else:
-
-            if not self._drop_offs.get_next(floor, self._direction):
-                self._direction = Directions.NONE
-                return True
-
-    def _get_next_stop(self, current_floor):
-        if self._drop_offs:
-            if self._direction == Directions.NONE:
-                return self._drop_offs.get_nearest(current_floor)
-            else:
-                return self._drop_offs.get_next(current_floor, self._direction)
-
-        elif self._pick_ups:
-            return self._pick_ups.get_nearest(current_floor)
-
-        else:
-            return current_floor
+            self._direction = Directions.NONE
 
     def _clean_requests(self):
         floor = self.hw.get_current_floor()
-        self._drop_offs.pop(floor, None)
+        self.requests[Directions.NONE].discard(floor)
 
         if self._direction == Directions.NONE:
-            self._pick_ups.pop(floor, None)
+            self.requests[Directions.UP].discard(floor)
+            self.requests[Directions.DOWN].discard(floor)
         else:
-            try:
-                with self._pick_ups.lock:
-                    self._pick_ups[floor].remove(self._direction)
-                    if not self._pick_ups[floor]:
-                        del self._pick_ups[floor]
-            except KeyError:
-                pass
+            self.requests[self._direction].discard(floor)
 
     def on_doors_closed(self):
         self._door_closed = True
@@ -122,26 +112,31 @@ class KeepDirectionElevator(object):
     def on_floor(self):
         floor = self.hw.get_current_floor()
 
-        try:
-            should_stop = floor in self._drop_offs or self._direction in self._pick_ups[floor]
-        except KeyError:
-            should_stop = False
-
-        if should_stop:
+        if self._should_stop(floor):
             self._stop(floor)
 
     def floor_button_pressed(self, floor, direction):
-        with self._pick_ups.lock:
-            try:
-                self._pick_ups[floor].add(direction)
-            except KeyError:
-                self._pick_ups[floor] = {direction}
+        self.requests[direction].add(floor)
 
         if self._direction == Directions.NONE and self._door_closed:
             self._start()
 
     def cabin_button_pressed(self, floor):
-        self._drop_offs[floor] = True
+        self.requests[Directions.NONE].add(floor)
 
         if self._direction == Directions.NONE and self._door_closed:
             self._start()
+
+
+class DropOffPriorityElevator(BaseElevator):
+    def _get_next_stop(self, current_floor):
+        if self._direction == Directions.NONE:
+            value = self._get_nearest_request(current_floor, Directions.NONE, Directions.UP, Directions.DOWN)
+
+        else:
+            value = self._get_next_request(current_floor, Directions.NONE)
+
+        return value or current_floor
+
+    def _should_stop(self, current_floor):
+        return current_floor in self.requests[Directions.NONE] or current_floor in self.requests[self._direction]
