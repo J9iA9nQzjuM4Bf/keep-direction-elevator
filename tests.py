@@ -58,6 +58,22 @@ class KeepDirectionElevatorTestCase(unittest.TestCase):
         self.assertTrue(self.hardware_elevator.stop_and_open_doors.called)
         self.assertEqual(self.elevator._direction, Directions.UP)
 
+        self.elevator.on_doors_closed()
+
+        self.assertTrue(self.hardware_elevator.move_up.called)
+        self.assertEqual(self.elevator._direction, Directions.UP)
+
+    def test_pick_up_opposite_direction(self):
+        self.elevator.floor_button_pressed(7, Directions.DOWN)
+        self.elevator._door_closed = True
+
+        self.elevator._direction = Directions.UP
+        self.hardware_elevator.get_current_floor.return_value = 7
+        self.elevator.on_floor()
+
+        self.assertTrue(self.hardware_elevator.stop_and_open_doors.called)
+        self.assertEqual(self.elevator._direction, Directions.NONE)
+
 
 def main():
     unittest.main()

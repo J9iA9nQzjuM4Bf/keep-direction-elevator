@@ -73,10 +73,10 @@ class BaseElevator(object):
             if self._direction == Directions.NONE:
                 self._update_direction()
 
-                if self._direction == Directions.UP:
-                    self.hw.move_up()
-                elif self._direction == Directions.DOWN:
-                    self.hw.move_down()
+            if self._direction == Directions.UP:
+                self.hw.move_up()
+            elif self._direction == Directions.DOWN:
+                self.hw.move_down()
 
     def _stop(self, floor):
         self._update_direction()
@@ -139,4 +139,10 @@ class DropOffPriorityElevator(BaseElevator):
         return value or current_floor
 
     def _should_stop(self, current_floor):
-        return current_floor in self.requests[Directions.NONE] or current_floor in self.requests[self._direction]
+        if self._get_next_request(Directions.NONE):
+            valid_directions = [Directions.NONE, self._direction]
+        else:
+            valid_directions = [Directions.NONE, Directions.UP, Directions.DOWN]
+
+        return any([current_floor in self.requests[direction] for direction in valid_directions])
+
