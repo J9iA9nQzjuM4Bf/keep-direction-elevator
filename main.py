@@ -138,3 +138,20 @@ class DropOffPriorityElevator(KeepDirectionElevator):
             return Directions.UP
         elif next_floor < current_floor:
             return Directions.DOWN
+
+
+class EqualPriorityElevator(KeepDirectionElevator):
+    def _get_new_direction(self, current_floor):
+        if self._direction == Directions.NONE:
+            next_floor = self._get_nearest_request(current_floor, Directions.NONE, Directions.UP, Directions.DOWN)
+
+        else:
+            next_floor = self._get_next_request(current_floor, Directions.NONE) \
+                         or self._get_next_request(current_floor, Directions.UP, Directions.DOWN)
+
+        if next_floor is None:
+            return Directions.NONE
+        elif next_floor > current_floor:
+            return Directions.UP
+        elif next_floor < current_floor:
+            return Directions.DOWN
