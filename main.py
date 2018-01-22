@@ -103,7 +103,7 @@ class KeepDirectionElevator(object):
         self._start()
 
     def on_floor(self):
-        if self._get_next_request(Directions.NONE):
+        if self._get_next_request(Directions.NONE, Directions.UP, Directions.DOWN):
             valid_directions = [Directions.NONE, self._direction]
         else:
             valid_directions = [Directions.NONE, Directions.UP, Directions.DOWN]
